@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speaker Refoaming Tool</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Speaker Refoaming Tool</h1>
+        
+        <div class="section">
+            <h2>1. Test Tones</h2>
+            <p>Use these tones to check for scraping or misalignment during the refoaming process.</p>
+            <div class="controls">
+                <button id="toneButton">Play 30 Hz Tone</button>
+                <button id="noiseButton">Play Pink Noise</button>
+            </div>
+            <p class="info">30 Hz Tone: Good for detecting low-frequency issues.</p>
+            <p class="info">Pink Noise: Useful for overall response and detecting issues across the frequency spectrum.</p>
+        </div>
+
+        <div class="section">
+            <h2>2. Frequency Sweep</h2>
+            <p>Use the sweep to test the full range of the speaker after refoaming.</p>
+            <div class="sweep-controls">
+                <label>Start: <input type="number" id="startFreq" value="20" min="20" max="20000"> Hz</label>
+                <label>End: <input type="number" id="endFreq" value="20000" min="20" max="20000"> Hz</label>
+                <label>Duration: <input type="number" id="sweepDuration" value="10" min="1" max="60"> s</label>
+                <p id="sweepDurationLabel">Duration: 10s</p>
+                <div class="checkbox-container">
+                    <input type="checkbox" id="loopSweep">
+                    <label for="loopSweep">Loop Sweep</label>
+                </div>
+                <button id="sweepButton">Start Sweep</button>
+            </div>
+            <p class="info">Adjust the frequency range and duration as needed. Looping the sweep can help identify persistent issues.</p>
+        </div>
+
+        <div class="section">
+            <h2>3. Volume Control</h2>
+            <div class="volume-control">
+                <span>-</span>
+                <input type="range" id="volumeSlider" min="0" max="100" step="1" value="50">
+                <span>+</span>
+                <div class="volume-indicator" id="volumeIndicator"></div>
+            </div>
+            <p class="info">Adjust the volume carefully. The 30 Hz tone can reach much higher volumes than other sounds.</p>
+            <p id="volumeWarning" class="warning" style="display: none;">Warning: High volume may cause distortion or damage. Reduce if necessary.</p>
+        </div>
+
+        <div class="section">
+            <h2>How to Use</h2>
+            <ol>
+                <li>Start with the 30 Hz tone at a low volume to check for any scraping or misalignment.</li>
+                <li>Use pink noise to assess overall speaker response and identify any issues across the frequency range.</li>
+                <li>After refoaming, use the frequency sweep to test the full range of the speaker.</li>
+                <li>Adjust the sweep settings as needed for more detailed testing of specific frequency ranges.</li>
+                <li>Always start with lower volumes and increase gradually to avoid damage to the speaker or your hearing.</li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
