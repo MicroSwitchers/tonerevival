@@ -1,3 +1,5 @@
+// script.js
+
 let audioContext;
 let oscillator;
 let noiseNode;
@@ -5,18 +7,21 @@ let gainNode;
 let waveShaperNode;
 let currentMode = null;
 
+// Array to keep track of active sweep oscillators
+let activeSweepOscillators = [];
+
+// DOM Elements
 const toneButton = document.getElementById('toneButton');
 const noiseButton = document.getElementById('noiseButton');
 const sweepButton = document.getElementById('sweepButton');
-const volumeSlider = document.getElementById('volumeSlider');
-const volumeIndicator = document.getElementById('volumeIndicator');
-const volumeWarning = document.getElementById('volumeWarning');
 const startFreqInput = document.getElementById('startFreq');
 const endFreqInput = document.getElementById('endFreq');
 const sweepDurationInput = document.getElementById('sweepDuration');
 const loopSweepCheckbox = document.getElementById('loopSweep');
 const sweepDurationLabel = document.getElementById('sweepDurationLabel');
+const statusMessage = document.getElementById('statusMessage');
 
+// Initialize Audio Context
 function initAudio() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     gainNode = audioContext.createGain();
@@ -25,9 +30,10 @@ function initAudio() {
     gainNode.connect(waveShaperNode);
     waveShaperNode.connect(audioContext.destination);
 
-    setVolume(volumeSlider.value);
+    setVolume();
 }
 
+// Create Distortion Curve to Prevent Clipping
 function makeDistortionCurve(amount) {
     const k = typeof amount === 'number' ? amount : 50;
     const n_samples = 44100;
@@ -41,6 +47,7 @@ function makeDistortionCurve(amount) {
     return curve;
 }
 
+// Toggle Audio Functionality
 function toggleAudio(mode) {
     if (!audioContext) {
         initAudio();
@@ -62,11 +69,12 @@ function toggleAudio(mode) {
     }
 }
 
+// Start 30 Hz Tone
 function startTone() {
     oscillator = audioContext.createOscillator();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(30, audioContext.currentTime);
-    
+
     // Add a compressor to prevent distortion
     const compressor = audioContext.createDynamicsCompressor();
     compressor.threshold.setValueAtTime(-24, audioContext.currentTime);
@@ -74,25 +82,29 @@ function startTone() {
     compressor.ratio.setValueAtTime(12, audioContext.currentTime);
     compressor.attack.setValueAtTime(0.003, audioContext.currentTime);
     compressor.release.setValueAtTime(0.25, audioContext.currentTime);
-    
+
     oscillator.connect(compressor);
     compressor.connect(gainNode);
-    
+
     currentMode = 'tone';
-    setVolume(volumeSlider.value);
+    setVolume();
     fadeIn();
-    
+
     oscillator.start();
     toneButton.textContent = 'Stop 30 Hz Tone';
     noiseButton.textContent = 'Play Pink Noise';
     sweepButton.textContent = 'Start Sweep';
+
+    statusMessage.textContent = 'Playing 30 Hz Tone.';
 }
 
+// Start Pink Noise
 function startPinkNoise() {
     const bufferSize = 4096;
     noiseNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
     let b0, b1, b2, b3, b4, b5, b6;
     b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+
     noiseNode.onaudioprocess = function(e) {
         const output = e.outputBuffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -109,126 +121,159 @@ function startPinkNoise() {
         }
     };
     noiseNode.connect(gainNode);
-    
+
     currentMode = 'noise';
-    setVolume(volumeSlider.value);
+    setVolume();
     fadeIn();
-    
+
     noiseButton.textContent = 'Stop Pink Noise';
     toneButton.textContent = 'Play 30 Hz Tone';
     sweepButton.textContent = 'Start Sweep';
+
+    statusMessage.textContent = 'Playing Pink Noise.';
 }
 
+// Start Frequency Sweep
 function startSweep() {
     const startFreq = parseFloat(startFreqInput.value);
     const endFreq = parseFloat(endFreqInput.value);
     const duration = parseFloat(sweepDurationInput.value);
 
-    oscillator = audioContext.createOscillator();
-    oscillator.type = 'sine';
-    oscillator.connect(gainNode);
+    // Validate inputs
+    if (isNaN(startFreq) || isNaN(endFreq) || isNaN(duration)) {
+        alert('Please enter valid frequency and duration values.');
+        return;
+    }
 
     currentMode = 'sweep';
-    setVolume(volumeSlider.value);
+    setVolume();
     fadeIn();
 
-    oscillator.start();
+    performSweep(true, startFreq, endFreq, duration);
+
     sweepButton.textContent = 'Stop Sweep';
     toneButton.textContent = 'Play 30 Hz Tone';
     noiseButton.textContent = 'Play Pink Noise';
 
-    function sweep(ascending = true) {
-        const now = audioContext.currentTime;
-        const sweepEndTime = now + duration;
-        
-        oscillator.frequency.setValueAtTime(ascending ? startFreq : endFreq, now);
-        oscillator.frequency.exponentialRampToValueAtTime(ascending ? endFreq : startFreq, sweepEndTime);
-        
-        if (loopSweepCheckbox.checked) {
-            oscillator.onended = null;
-            setTimeout(() => {
-                if (currentMode === 'sweep') {
-                    sweep(!ascending);
-                }
-            }, duration * 1000);
-        } else if (!ascending) {
-            oscillator.onended = stopAudio;
-            oscillator.stop(sweepEndTime);
-        }
-    }
-
-    sweep();
+    statusMessage.textContent = 'Performing Frequency Sweep.';
 }
 
+// Perform Sweep Function with Looping Capability
+function performSweep(ascending, startFreq, endFreq, duration) {
+    if (currentMode !== 'sweep') return;
+
+    // Create a new oscillator for each sweep
+    const sweepOsc = audioContext.createOscillator();
+    sweepOsc.type = 'sine';
+    sweepOsc.frequency.setValueAtTime(ascending ? startFreq : endFreq, audioContext.currentTime);
+    sweepOsc.connect(gainNode);
+    sweepOsc.start();
+
+    // Add to active sweep oscillators array
+    activeSweepOscillators.push(sweepOsc);
+
+    const sweepEndTime = audioContext.currentTime + duration;
+
+    // Schedule the frequency ramp
+    sweepOsc.frequency.exponentialRampToValueAtTime(ascending ? endFreq : startFreq, sweepEndTime);
+
+    // Stop the oscillator slightly after the sweep to ensure ramp completion
+    sweepOsc.stop(sweepEndTime + 0.1);
+
+    // Handle the end of the sweep
+    sweepOsc.onended = () => {
+        // Remove the oscillator from the active array
+        activeSweepOscillators = activeSweepOscillators.filter(osc => osc !== sweepOsc);
+
+        if (currentMode !== 'sweep') return;
+
+        if (loopSweepCheckbox.checked) {
+            // Perform the next sweep in the opposite direction
+            performSweep(!ascending, startFreq, endFreq, duration);
+        } else {
+            stopAudio();
+        }
+    };
+}
+
+// Stop All Audio Functions
 function stopAudio() {
     fadeOut().then(() => {
+        // Stop and disconnect the tone oscillator
         if (oscillator) {
             oscillator.stop();
             oscillator.disconnect();
+            oscillator = null;
         }
+
+        // Stop and disconnect the noise node
         if (noiseNode) {
             noiseNode.disconnect();
+            noiseNode = null;
         }
+
+        // Stop and disconnect all active sweep oscillators
+        activeSweepOscillators.forEach(sweepOsc => {
+            sweepOsc.stop();
+            sweepOsc.disconnect();
+        });
+        activeSweepOscillators = [];
+
         currentMode = null;
         toneButton.textContent = 'Play 30 Hz Tone';
         noiseButton.textContent = 'Play Pink Noise';
         sweepButton.textContent = 'Start Sweep';
+
+        statusMessage.textContent = 'No audio playing.';
     });
 }
 
+// Fade In Function
 function fadeIn() {
     gainNode.gain.setValueAtTime(0, audioContext.currentTime);
     gainNode.gain.linearRampToValueAtTime(getCurrentVolume(), audioContext.currentTime + 0.1);
 }
 
+// Fade Out Function
 function fadeOut() {
     return new Promise(resolve => {
-        const stopTime = audioContext.currentTime + 0.1;
-        gainNode.gain.linearRampToValueAtTime(0, stopTime);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.1);
         setTimeout(resolve, 100);
     });
 }
 
+// Get Current Volume Based on Mode
 function getCurrentVolume() {
     const minValue = 0.0001;
     let maxValue;
-    
+
     if (currentMode === 'tone') {
-        maxValue = 5; // Reduced from 20 to prevent instability
+        maxValue = 10; // Increased to make the 30 Hz tone louder by default
     } else {
         maxValue = 1;
     }
-    
-    // Adjusted curve for more control at lower volumes
-    return minValue + (maxValue - minValue) * Math.pow(volumeSlider.value / 100, 2);
+
+    return minValue + (maxValue - minValue) * Math.pow(50 / 100, 2); // Default volume set to 50
 }
 
-function setVolume(value) {
+// Set Volume Function
+function setVolume() {
     if (gainNode) {
         let scaledVolume = getCurrentVolume();
-        
-        // Apply additional scaling for 30 Hz tone
+
         if (currentMode === 'tone') {
-            // Boost the lower volume range
-            scaledVolume = Math.pow(scaledVolume, 0.7) * 2;
+            scaledVolume = Math.pow(scaledVolume, 0.7) * 2.5; // Increased scaling factor for louder tone
         }
-        
+
         gainNode.gain.cancelScheduledValues(audioContext.currentTime);
         gainNode.gain.setTargetAtTime(scaledVolume, audioContext.currentTime, 0.1);
-        updateVolumeIndicator(value);
     }
 }
 
-function updateVolumeIndicator(value) {
-    const hue = 120 - (value * 1.2);
-    volumeIndicator.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
-    volumeWarning.style.display = value > 75 ? 'block' : 'none'; // Adjusted threshold
-}
-
+// Event Listeners
 toneButton.addEventListener('click', () => toggleAudio('tone'));
 noiseButton.addEventListener('click', () => toggleAudio('noise'));
 sweepButton.addEventListener('click', () => toggleAudio('sweep'));
-volumeSlider.addEventListener('input', () => setVolume(volumeSlider.value));
 sweepDurationInput.addEventListener('input', () => {
     if (sweepDurationLabel) {
         sweepDurationLabel.textContent = `Duration: ${sweepDurationInput.value}s`;
